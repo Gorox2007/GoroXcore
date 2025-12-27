@@ -1,0 +1,417 @@
+<!-- templates/main/match.html -->
+{% extends 'main/layout.html' %}
+
+{% block title %}{{ title }} - GoroXcore{% endblock %}
+
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="match-detail">
+    <div class="content-section">
+        <!-- Основная информация о матче -->
+        <div class="match-info">
+            <div class="match-teams">
+                <div class="team home-team">
+                    {% if match.home_club.emblem %}
+                        <img src="{{ match.home_club.emblem.url }}" alt="{{ match.home_club.name }}" class="team-logo">
+                    {% endif %}
+                    <h2>{{ match.home_club.name }}</h2>
+                    <p class="team-info">{{ match.home_club.country }}, {{ match.home_club.town }}</p>
+                </div>
+                
+                <div class="match-score">
+                    {% if match.status == 'finished' %}
+                        <div class="score">{{ match.home_goals }} : {{ match.away_goals }}</div>
+                        {% if winner == 'draw' %}
+                            <div class="result draw">Ничья</div>
+                        {% else %}
+                            <div class="result winner">Победитель: {{ winner.name }}</div>
+                        {% endif %}
+                    {% else %}
+                        <div class="vs">vs</div>
+                        <div class="match-date">{{ match.datetime|date:"d.m.Y H:i" }}</div>
+                    {% endif %}
+                </div>
+                
+                <div class="team away-team">
+                    {% if match.away_club.emblem %}
+                        <img src="{{ match.away_club.emblem.url }}" alt="{{ match.away_club.name }}" class="team-logo">
+                    {% endif %}
+                    <h2>{{ match.away_club.name }}</h2>
+                    <p class="team-info">{{ match.away_club.country }}, {{ match.away_club.town }}</p>
+                </div>
+            </div>
+            
+            <div class="match-meta">
+                <div class="meta-item">
+                    <strong>Дата и время:</strong> {{ match.datetime|date:"d.m.Y H:i" }}
+                </div>
+                <div class="meta-item">
+                    <strong>Стадион:</strong> {{ match.stadium }}, {{ match.town }}
+                </div>
+                <div class="meta-item">
+                    <strong>Турнир:</strong> {{ match.tournament|default:"Не указан" }}
+                </div>
+                <div class="meta-item">
+                    <strong>Статус:</strong> 
+                    <span class="status-{{ match.status }}">
+                        {{ match.get_status_display }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Статистика матча -->
+        {% if match.status == 'finished' %}
+        <div class="match-stats">
+            <h3>Статистика матча</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h4>Владение мячом</h4>
+                    <div class="stat-bar">
+                        <div class="stat-label">{{ match.home_club.name }}</div>
+                        <div class="stat-value">{{ match.home_possession }}%</div>
+                        <div class="stat-bar-container">
+                            <div class="stat-bar-fill home" style="width: {{ match.home_possession }}%"></div>
+                        </div>
+                    </div>
+                    <div class="stat-bar">
+                        <div class="stat-label">{{ match.away_club.name }}</div>
+                        <div class="stat-value">{{ match.away_possession }}%</div>
+                        <div class="stat-bar-container">
+                            <div class="stat-bar-fill away" style="width: {{ match.away_possession }}%"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <h4>Удары</h4>
+                    <div class="stat-row">
+                        <span>{{ match.home_club.name }}:</span>
+                        <span>{{ match.home_shots }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>{{ match.away_club.name }}:</span>
+                        <span>{{ match.away_shots }}</span>
+                    </div>
+                    <div class="stat-row total">
+                        <span>Всего:</span>
+                        <span>{{ match.home_shots|add:match.away_shots }}</span>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <h4>Удары в створ</h4>
+                    <div class="stat-row">
+                        <span>{{ match.home_club.name }}:</span>
+                        <span>{{ match.home_shots_on_target }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>{{ match.away_club.name }}:</span>
+                        <span>{{ match.away_shots_on_target }}</span>
+                    </div>
+                    <div class="stat-row total">
+                        <span>Всего:</span>
+                        <span>{{ match.home_shots_on_target|add:match.away_shots_on_target }}</span>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <h4>Сейвы вратарей</h4>
+                    <div class="stat-row">
+                        <span>{{ match.home_club.name }}:</span>
+                        <span>{{ match.home_saves }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>{{ match.away_club.name }}:</span>
+                        <span>{{ match.away_saves }}</span>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <h4>Красные карточки</h4>
+                    <div class="stat-row">
+                        <span>{{ match.home_club.name }}:</span>
+                        <span class="red-card">{{ match.home_red_cards }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>{{ match.away_club.name }}:</span>
+                        <span class="red-card">{{ match.away_red_cards }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Навигация -->
+        <div class="match-navigation">
+            <a href="{% url 'home' %}" class="nav-button">На главную</a>
+            <a href="{% url 'club' match.home_club.id %}" class="nav-button">Страница {{ match.home_club.name }}</a>
+            <a href="{% url 'club' match.away_club.id %}" class="nav-button">Страница {{ match.away_club.name }}</a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .match-detail {
+        width: 100%;
+    }
+    
+    .match-teams {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        flex-wrap: wrap;
+        gap: 2rem;
+    }
+    
+    .team {
+        text-align: center;
+        flex: 1;
+        min-width: 200px;
+    }
+    
+    .team-logo {
+        max-width: 120px;
+        max-height: 120px;
+        margin-bottom: 1rem;
+        object-fit: contain;
+    }
+    
+    .team h2 {
+        color: #2c3e50;
+        margin-bottom: 0.5rem;
+        font-size: 1.8rem;
+    }
+    
+    .team-info {
+        color: #666;
+        font-size: 0.9rem;
+    }
+    
+    .match-score {
+        text-align: center;
+        flex: 1;
+        min-width: 200px;
+    }
+    
+    .score {
+        font-size: 4rem;
+        font-weight: bold;
+        color: #ff6b35;
+        margin-bottom: 0.5rem;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .vs {
+        font-size: 3rem;
+        font-weight: bold;
+        color: #2c3e50;
+        margin-bottom: 0.5rem;
+    }
+    
+    .match-date {
+        font-size: 1.2rem;
+        color: #666;
+    }
+    
+    .result {
+        font-size: 1.3rem;
+        font-weight: bold;
+        padding: 0.5rem 1rem;
+        border-radius: 25px;
+        display: inline-block;
+    }
+    
+    .winner {
+        background: linear-gradient(135deg, #4CAF50, #45a049);
+        color: white;
+    }
+    
+    .draw {
+        background: linear-gradient(135deg, #FF9800, #F57C00);
+        color: white;
+    }
+    
+    .match-meta {
+        background: #f8f9fa;
+        padding: 1.5rem;
+        border-radius: 10px;
+        margin-top: 2rem;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+    }
+    
+    .meta-item {
+        padding: 0.5rem;
+    }
+    
+    .status-scheduled {
+        color: #ff6b35;
+        font-weight: bold;
+    }
+    
+    .status-finished {
+        color: #4CAF50;
+        font-weight: bold;
+    }
+    
+    .match-stats {
+        margin-top: 2rem;
+    }
+    
+    .match-stats h3 {
+        color: #2c3e50;
+        margin-bottom: 1.5rem;
+        border-bottom: 2px solid #ff6b35;
+        padding-bottom: 0.5rem;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-top: 1rem;
+    }
+    
+    .stat-card {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        transition: transform 0.3s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .stat-card h4 {
+        color: #ff6b35;
+        margin-bottom: 1rem;
+        text-align: center;
+        font-size: 1.2rem;
+    }
+    
+    .stat-bar {
+        margin-bottom: 1rem;
+    }
+    
+    .stat-label {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.3rem;
+        font-size: 0.9rem;
+    }
+    
+    .stat-value {
+        font-weight: bold;
+        color: #2c3e50;
+    }
+    
+    .stat-bar-container {
+        height: 10px;
+        background: #e0e0e0;
+        border-radius: 5px;
+        overflow: hidden;
+    }
+    
+    .stat-bar-fill {
+        height: 100%;
+        border-radius: 5px;
+    }
+    
+    .stat-bar-fill.home {
+        background: linear-gradient(90deg, #667eea, #764ba2);
+    }
+    
+    .stat-bar-fill.away {
+        background: linear-gradient(90deg, #f093fb, #f5576c);
+    }
+    
+    .stat-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .stat-row:last-child {
+        border-bottom: none;
+    }
+    
+    .stat-row.total {
+        font-weight: bold;
+        color: #2c3e50;
+        margin-top: 0.5rem;
+        border-top: 2px solid #ff6b35;
+        border-bottom: none;
+        padding-top: 0.8rem;
+    }
+    
+    .red-card {
+        color: #f44336;
+        font-weight: bold;
+    }
+    
+    .match-navigation {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        margin-top: 2rem;
+        flex-wrap: wrap;
+    }
+    
+    .nav-button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 0.8rem 1.5rem;
+        border-radius: 25px;
+        text-decoration: none;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        border: none;
+        cursor: pointer;
+        text-align: center;
+        min-width: 150px;
+    }
+    
+    .nav-button:hover {
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+    
+    @media (max-width: 768px) {
+        .match-teams {
+            flex-direction: column;
+        }
+        
+        .team {
+            min-width: 100%;
+        }
+        
+        .score {
+            font-size: 3rem;
+        }
+        
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .match-navigation {
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .nav-button {
+            width: 100%;
+            max-width: 250px;
+        }
+    }
+</style>
+{% endblock %}

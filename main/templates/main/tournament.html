@@ -1,0 +1,205 @@
+{% extends 'main/layout.html' %}
+
+{% block title %}{{ tournament.name }} - GoroXcore{% endblock %}
+
+{% block page_title %}{{ tournament.name }}{% endblock %}
+
+{% block content %}
+<div class="content-section">
+    <!-- Информация о турнире -->
+    <div style="display: flex; align-items: center; gap: 2rem; margin-bottom: 2rem; padding: 1.5rem; background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); border-radius: 10px;">
+        {% if tournament.logo %}
+            <img src="{{ tournament.logo.url }}" 
+                 alt="{{ tournament.name }}" 
+                 style="width: 120px; height: 120px; object-fit: contain; border-radius: 10px; border: 3px solid #ff6b35;">
+        {% endif %}
+        <div>
+            <h2 style="margin-bottom: 0.5rem;">{{ tournament.name }}</h2>
+            {% if tournament.country %}
+                <p style="color: #666; font-size: 1.1rem;">
+                    <strong>Страна:</strong> {{ tournament.country }}
+                </p>
+            {% endif %}
+            <p style="color: #666; font-size: 1.1rem;">
+                <strong>Участников:</strong> {{ tournament.participants_count }}
+            </p>
+        </div>
+    </div>
+
+    <!-- Таблица участников -->
+    <div style="margin-bottom: 2rem;">
+        <h2 style="color: #2c3e50; border-bottom: 3px solid #ff6b35; padding-bottom: 0.5rem; margin-bottom: 1rem;">Турнирная таблица</h2>
+        
+        {% if participants %}
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                    <thead>
+                        <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                            <th style="padding: 1rem; text-align: center; width: 50px;">#</th>
+                            <th style="padding: 1rem; text-align: left;">Клуб</th>
+                            <th style="padding: 1rem; text-align: center;">И</th>
+                            <th style="padding: 1rem; text-align: center;">В</th>
+                            <th style="padding: 1rem; text-align: center;">Н</th>
+                            <th style="padding: 1rem; text-align: center;">П</th>
+                            <th style="padding: 1rem; text-align: center;">З</th>
+                            <th style="padding: 1rem; text-align: center;">П</th>
+                            <th style="padding: 1rem; text-align: center;">Р</th>
+                            <th style="padding: 1rem; text-align: center;">О</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for participant in participants %}
+                        <tr style="border-bottom: 1px solid #eee; transition: background 0.3s;">
+                            <td style="padding: 1rem; text-align: center; font-weight: bold; color: #2c3e50;">
+                                {{ forloop.counter }}
+                            </td>
+                            <td style="padding: 1rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    {% if participant.club.emblem %}
+                                        <img src="{{ participant.club.emblem.url }}" 
+                                             alt="{{ participant.club.name }}"
+                                             style="width: 30px; height: 30px; object-fit: contain; border-radius: 50%;">
+                                    {% endif %}
+                                    <a href="{% url 'club' participant.club.id %}" 
+                                       style="color: #667eea; text-decoration: none; font-weight: 500;">
+                                        {{ participant.club.name }}
+                                    </a>
+                                </div>
+                            </td>
+                            <td style="padding: 1rem; text-align: center;">{{ participant.matches_played }}</td>
+                            <td style="padding: 1rem; text-align: center; color: #27ae60; font-weight: bold;">{{ participant.wins }}</td>
+                            <td style="padding: 1rem; text-align: center; color: #f39c12; font-weight: bold;">{{ participant.draws }}</td>
+                            <td style="padding: 1rem; text-align: center; color: #e74c3c; font-weight: bold;">{{ participant.losses }}</td>
+                            <td style="padding: 1rem; text-align: center; font-weight: bold;">{{ participant.goals_for }}</td>
+                            <td style="padding: 1rem; text-align: center;">{{ participant.goals_against }}</td>
+                            <td style="padding: 1rem; text-align: center; font-weight: bold; 
+                                {% if participant.goal_difference > 0 %}color: #27ae60;
+                                {% elif participant.goal_difference < 0 %}color: #e74c3c;
+                                {% else %}color: #f39c12;{% endif %}">
+                                {{ participant.goal_difference|stringformat:"+d" }}
+                            </td>
+                            <td style="padding: 1rem; text-align: center; background: rgba(102, 126, 234, 0.1); font-weight: bold; color: #2c3e50;">
+                                {{ participant.points }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div style="text-align: center; padding: 2rem; color: #666;">
+                <p>В этом турнире пока нет участников</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Матчи турнира -->
+    <div>
+        <h2 style="color: #2c3e50; border-bottom: 3px solid #ff6b35; padding-bottom: 0.5rem; margin-bottom: 1rem;">Матчи</h2>
+        
+        {% if matches %}
+            <div style="display: grid; gap: 1rem;">
+                {% for match in matches %}
+                <div style="background: white; border-radius: 10px; padding: 1.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: transform 0.3s; border: 2px solid {% if match.status == 'finished' %}#27ae60{% else %}#667eea{% endif %};">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            {% if match.home_club.emblem %}
+                                <img src="{{ match.home_club.emblem.url }}" 
+                                     alt="{{ match.home_club.name }}"
+                                     style="width: 40px; height: 40px; object-fit: contain; border-radius: 50%;">
+                            {% endif %}
+                            <div>
+                                <a href="{% url 'club' match.home_club.id %}" 
+                                   style="color: #2c3e50; text-decoration: none; font-weight: bold; font-size: 1.1rem;">
+                                    {{ match.home_club.name }}
+                                </a>
+                                {% if match.status == 'finished' %}
+                                    <div style="font-size: 1.5rem; font-weight: bold; color: #27ae60;">
+                                        {{ match.home_goals }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div style="text-align: center;">
+                            <div style="font-size: 0.9rem; color: #666; margin-bottom: 0.25rem;">
+                                {{ match.datetime|date:"d.m.Y H:i" }}
+                            </div>
+                            <div style="font-weight: bold; color: #ff6b35; font-size: 1.2rem;">
+                                VS
+                            </div>
+                            <div style="font-size: 0.9rem; color: #666; margin-top: 0.25rem;">
+                                <span style="padding: 0.25rem 0.75rem; border-radius: 15px; background: {% if match.status == 'finished' %}#27ae60{% else %}#667eea{% endif %}; color: white;">
+                                    {{ match.get_status_display }}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div style="text-align: right;">
+                                <a href="{% url 'club' match.away_club.id %}" 
+                                   style="color: #2c3e50; text-decoration: none; font-weight: bold; font-size: 1.1rem;">
+                                    {{ match.away_club.name }}
+                                </a>
+                                {% if match.status == 'finished' %}
+                                    <div style="font-size: 1.5rem; font-weight: bold; color: #27ae60;">
+                                        {{ match.away_goals }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            {% if match.away_club.emblem %}
+                                <img src="{{ match.away_club.emblem.url }}" 
+                                     alt="{{ match.away_club.name }}"
+                                     style="width: 40px; height: 40px; object-fit: contain; border-radius: 50%;">
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; color: #666; border-top: 1px solid #eee; padding-top: 1rem;">
+                        <div>
+                            <i class="fas fa-map-marker-alt" style="margin-right: 0.5rem;"></i>
+                            {{ match.stadium }}, {{ match.town }}
+                        </div>
+                        <a href="{% url 'match' match.id %}" 
+                           style="color: #667eea; text-decoration: none; font-weight: 500;">
+                            Подробнее →
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div style="text-align: center; padding: 2rem; color: #666;">
+                <p>В этом турнире пока нет матчей</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Статистика турнира -->
+    {% if tournament_stats %}
+    <div style="margin-top: 2rem; padding: 1.5rem; background: linear-gradient(135deg, rgba(39, 174, 96, 0.1) 0%, rgba(46, 204, 113, 0.1) 100%); border-radius: 10px;">
+        <h3 style="color: #2c3e50; margin-bottom: 1rem;">Статистика турнира</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <div style="text-align: center; padding: 1rem; background: white; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                <div style="font-size: 2rem; font-weight: bold; color: #667eea;">{{ tournament_stats.total_participants }}</div>
+                <div style="color: #666;">Участников</div>
+            </div>
+            <div style="text-align: center; padding: 1rem; background: white; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                <div style="font-size: 2rem; font-weight: bold; color: #27ae60;">{{ tournament_stats.total_matches }}</div>
+                <div style="color: #666;">Всего матчей</div>
+            </div>
+            <div style="text-align: center; padding: 1rem; background: white; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                <div style="font-size: 2rem; font-weight: bold; color: #e74c3c;">{{ tournament_stats.total_goals }}</div>
+                <div style="color: #666;">Всего голов</div>
+            </div>
+            {% if tournament_stats.avg_goals_per_match > 0 %}
+            <div style="text-align: center; padding: 1rem; background: white; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                <div style="font-size: 2rem; font-weight: bold; color: #f39c12;">{{ tournament_stats.avg_goals_per_match }}</div>
+                <div style="color: #666;">Голов за матч</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
