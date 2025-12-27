@@ -100,37 +100,6 @@ python manage.py runserver
 
 API (планируется): http://127.0.0.1:8000/api/
 
-📊 Модели данных
-Club (Клуб)
-python
-class Club(models.Model):
-    name = models.CharField(max_length=255)           # Название клуба
-    country = models.CharField(max_length=100)        # Страна
-    town = models.CharField(max_length=100)           # Город
-    price = models.IntegerField()                     # Стоимость клуба
-    emblem = models.ImageField(upload_to='clubs/')    # Эмблема
-    stadium = models.CharField(max_length=255)        # Стадион
-    goals = models.FloatField()                       # Среднее количество голов
-    goals_missed = models.FloatField()                # Среднее количество пропущенных
-    possession = models.IntegerField()                # Среднее владение (%)
-    # ... другие поля
-Tournament (Турнир)
-python
-class Tournament(models.Model):
-    name = models.CharField(max_length=255)          # Название турнира
-    country = models.CharField(max_length=100)       # Страна проведения
-    logo = models.ImageField(upload_to='tournaments/') # Логотип
-    clubs = models.ManyToManyField(Club, through='TournamentClub')
-Match (Матч)
-python
-class Match(models.Model):
-    home_club = models.ForeignKey(Club)             # Хозяева
-    away_club = models.ForeignKey(Club)             # Гости
-    tournament = models.ForeignKey(Tournament)      # Турнир
-    home_goals = models.IntegerField()              # Голы хозяев
-    away_goals = models.IntegerField()              # Голы гостей
-    status = models.CharField()                     # Статус (scheduled/finished)
-    # ... статистические поля
 🔌 API (Планируется)
 После интеграции с Transfermarkt API будут доступны следующие эндпоинты:
 
