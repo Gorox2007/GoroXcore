@@ -3,9 +3,9 @@
 {% block content %}
 <div class="content-section">
     <div class="club-detail-header">
-        {% if club.emblem %}
+        {% if club.emblem_src %}
         <div class="club-detail-emblem">
-            <img src="{{ club.emblem.url }}" alt="{{ club.name }}">
+            <img src="{{ club.emblem_src }}" alt="{{ club.name }}">
         </div>
         {% endif %}
         <div class="club-detail-info">

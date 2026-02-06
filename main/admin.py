@@ -41,7 +41,8 @@ class TournamentAdmin(admin.ModelAdmin):
             'fields': (
                 'name',
                 'country',
-                'logo'
+                'logo',
+                'logo_url'
             )
         }),
         ('Статистика', {
@@ -70,10 +71,10 @@ class TournamentAdmin(admin.ModelAdmin):
     matches_count.short_description = 'Матчи'
     
     def logo_preview(self, obj):
-        if obj.logo:
+        if obj.logo_src:
             return format_html(
                 '<img src="{}" style="width: 50px; height: 50px; object-fit: contain; border-radius: 5px;" />', 
-                obj.logo.url
+                obj.logo_src
             )
         return format_html(
             '<div style="width: 50px; height: 50px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; border-radius: 5px;">'
@@ -270,7 +271,7 @@ class ClubAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('Медиа', {
-            'fields': ('emblem',)
+            'fields': ('emblem', 'emblem_url')
         })
     )
     
@@ -291,10 +292,10 @@ class ClubAdmin(admin.ModelAdmin):
     matches_count.short_description = 'Матчи'
     
     def emblem_preview(self, obj):
-        if obj.emblem:
+        if obj.emblem_src:
             return format_html(
                 '<img src="{}" style="width: 50px; height: 50px; object-fit: contain; border-radius: 50%; border: 2px solid #ddd;" />', 
-                obj.emblem.url
+                obj.emblem_src
             )
         return format_html(
             '<div style="width: 50px; height: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); '

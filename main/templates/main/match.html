@@ -12,8 +12,8 @@
         <div class="match-info">
             <div class="match-teams">
                 <div class="team home-team">
-                    {% if match.home_club.emblem %}
-                        <img src="{{ match.home_club.emblem.url }}" alt="{{ match.home_club.name }}" class="team-logo">
+                    {% if match.home_club.emblem_src %}
+                        <img src="{{ match.home_club.emblem_src }}" alt="{{ match.home_club.name }}" class="team-logo">
                     {% endif %}
                     <h2>{{ match.home_club.name }}</h2>
                     <p class="team-info">{{ match.home_club.country }}, {{ match.home_club.town }}</p>
@@ -34,8 +34,8 @@
                 </div>
                 
                 <div class="team away-team">
-                    {% if match.away_club.emblem %}
-                        <img src="{{ match.away_club.emblem.url }}" alt="{{ match.away_club.name }}" class="team-logo">
+                    {% if match.away_club.emblem_src %}
+                        <img src="{{ match.away_club.emblem_src }}" alt="{{ match.away_club.name }}" class="team-logo">
                     {% endif %}
                     <h2>{{ match.away_club.name }}</h2>
                     <p class="team-info">{{ match.away_club.country }}, {{ match.away_club.town }}</p>

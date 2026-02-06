@@ -34,6 +34,10 @@ class Club(models.Model):
         blank=True,
         null=True
     )
+    emblem_url = models.URLField(
+        verbose_name='Эмблема (URL)',
+        blank=True
+    )
     founded = models.IntegerField(
         verbose_name='Год основания'
     )
@@ -89,6 +93,12 @@ class Club(models.Model):
     def __str__(self):
         return f"{self.name} ({self.country})"
 
+    @property
+    def emblem_src(self):
+        if self.emblem:
+            return self.emblem.url
+        return self.emblem_url or ""
+
     def get_last_matches(self):
         """Возвращает последние 5 матчей"""
         return [self.match_1, self.match_2, self.match_3, self.match_4, self.match_5]
@@ -135,6 +145,10 @@ class Tournament(models.Model):
         blank=True,
         null=True
     )
+    logo_url = models.URLField(
+        verbose_name='Логотип (URL)',
+        blank=True
+    )
     
     # Связь с клубами через промежуточную модель
     clubs = models.ManyToManyField(
@@ -151,6 +165,12 @@ class Tournament(models.Model):
     
     def __str__(self):
         return f"{self.name}"
+
+    @property
+    def logo_src(self):
+        if self.logo:
+            return self.logo.url
+        return self.logo_url or ""
     
     @property
     def participants_count(self):

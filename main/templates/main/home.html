@@ -78,9 +78,9 @@
                 <a href="{% url 'tournament' tournament.id %}" class="tournament-card-link">
                     <div class="tournament-card">
                         <div class="tournament-header">
-                            {% if tournament.logo %}
+                            {% if tournament.logo_src %}
                             <div class="tournament-logo">
-                                <img src="{{ tournament.logo.url }}" alt="{{ tournament.name }}">
+                                <img src="{{ tournament.logo_src }}" alt="{{ tournament.name }}">
                             </div>
                             {% endif %}
                             <h4>{{ tournament.name }}</h4>
@@ -127,9 +127,9 @@
                 {% for club in clubs %}
                 <a href="{% url 'club' club.id %}" class="club-card-link">
                     <div class="club-card">
-                        {% if club.emblem %}
+                        {% if club.emblem_src %}
                         <div class="club-emblem">
-                            <img src="{{ club.emblem.url }}" alt="{{ club.name }}">
+                            <img src="{{ club.emblem_src }}" alt="{{ club.name }}">
                         </div>
                         {% endif %}
                         <div class="club-info">
@@ -166,8 +166,8 @@
                     <div class="match-preview-card {{ match.status }}">
                         <div class="match-teams">
                             <div class="team home-team">
-                                {% if match.home_club.emblem %}
-                                <img src="{{ match.home_club.emblem.url }}" alt="{{ match.home_club.name }}" class="team-logo-small">
+                                {% if match.home_club.emblem_src %}
+                                <img src="{{ match.home_club.emblem_src }}" alt="{{ match.home_club.name }}" class="team-logo-small">
                                 {% endif %}
                                 <span class="team-name">{{ match.home_club.name }}</span>
                                 {% if match.status == 'finished' %}
@@ -180,8 +180,8 @@
                                 <span class="team-score">{{ match.away_goals }}</span>
                                 {% endif %}
                                 <span class="team-name">{{ match.away_club.name }}</span>
-                                {% if match.away_club.emblem %}
-                                <img src="{{ match.away_club.emblem.url }}" alt="{{ match.away_club.name }}" class="team-logo-small">
+                                {% if match.away_club.emblem_src %}
+                                <img src="{{ match.away_club.emblem_src }}" alt="{{ match.away_club.name }}" class="team-logo-small">
                                 {% endif %}
                             </div>
                         </div>
