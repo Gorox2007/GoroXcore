@@ -41,6 +41,34 @@ curl -X POST http://127.0.0.1:8000/login \
   -d '{"email":"user@example.com","password":"secret123"}'
 ```
 
+### POST /token  (для кнопки Authorize в Swagger)
+- Формат: `application/x-www-form-urlencoded`
+- Поля: `username` (email), `password`
+- Результат: JWT токен
+```bash
+curl -X POST http://127.0.0.1:8000/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=user@example.com&password=secret123"
+```
+
+### GET /users
+- Требуется авторизация: `Authorization: Bearer <token>`
+- Результат: список пользователей (id, email, first_name, last_name)
+```bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:8000/users
+```
+
+### PATCH /users/me
+- Требуется авторизация: `Authorization: Bearer <token>`
+- Тело (опционально): `first_name`, `last_name`, `password` (до 72 символов)
+- Результат: обновлённый пользователь
+```bash
+curl -X PATCH http://127.0.0.1:8000/users/me \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"first_name":"New","last_name":"Name","password":"newpass123"}'
+```
+
 ## Структура
 ```
 app/
