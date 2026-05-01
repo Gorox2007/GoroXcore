@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from . import models, schemas
 from .broker import broker
 from .database import SessionLocal
+from .payment_client import create_payment
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ def parse_int(value: str, field_name: str) -> int:
         raise ValueError(f"{field_name} должен быть целым числом")
 
 
-def booking_to_out(booking: models.Booking) -> dict:
+def booking_to_out(booking: models.Booking, payment_url: str | None = None) -> dict:
     return {
         "id": booking.id,
         "match_id": booking.match_id,
@@ -70,6 +71,7 @@ def booking_to_out(booking: models.Booking) -> dict:
         "reserved_at": booking.reserved_at,
         "expires_at": booking.expires_at,
         "payment_reference": booking.payment_reference,
+        "payment_url": payment_url,
     }
 
 
@@ -200,8 +202,30 @@ async def create_booking(payload: schemas.BookingCreate, db: AsyncSession = Depe
     db.add(booking)
     await db.commit()
     await db.refresh(booking)
+
     await broker.publish("booking.created", booking_event_payload(booking))
-    return booking_to_out(booking)
+
+    payment = await create_payment(
+        order_id=booking.id,
+        amount=booking.total_price,
+        currency=booking.currency,
+        description=f"Билеты на матч {booking.match_id}",
+        customer_email=booking.customer_email,
+    )
+
+    payment_url: str | None = None
+    if payment:
+        payment_id = payment.get("payment_id")
+        payment_url = payment.get("payment_url")
+        if payment_id:
+            booking.payment_reference = payment_id
+            await db.commit()
+            await db.refresh(booking)
+
+    if not payment_url:
+        payment_url = f"http://localhost:8000/payments/{payment_id}" if payment and payment.get("payment_id") else None
+
+    return booking_to_out(booking, payment_url)
 
 
 @app.get(

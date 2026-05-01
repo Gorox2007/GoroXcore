@@ -46,5 +46,39 @@ services:
     ports:
       - "8000:8000"
 
+  ticketing-fastapi:
+    build:
+      context: ./ticketing_fastapi
+      dockerfile: Dockerfile
+    container_name: ticketing-fastapi
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:///./data/ticketing.db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_QUEUE: ticketing.events
+      PAYMENT_SERVICE_URL: http://payment-service:8000
+    ports:
+      - "8001:8001"
+    volumes:
+      - ticketing_data:/app/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ticketing-consumer:
+    build:
+      context: ./ticketing_fastapi
+      dockerfile: Dockerfile
+    container_name: ticketing-consumer
+    command: ["python", "-m", "app.consumer"]
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_QUEUE: ticketing.events
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  ticketing_data:

@@ -42,6 +42,9 @@ class BookingOut(BaseModel):
     payment_reference: str | None = Field(
         default=None, description="Идентификатор внешнего платежа"
     )
+    payment_url: str | None = Field(
+        default=None, description="Ссылка на оплату"
+    )
 
 
 class AvailabilityOut(BaseModel):
