@@ -1,0 +1,48 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: ticketing-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  ticketing-fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ticketing-fastapi
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:///./data/ticketing.db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_QUEUE: ticketing.events
+    ports:
+      - "8001:8001"
+    volumes:
+      - ticketing_db:/app/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ticketing-consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ticketing-consumer
+    command: ["python", "-m", "app.consumer"]
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_QUEUE: ticketing.events
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  ticketing_db:
