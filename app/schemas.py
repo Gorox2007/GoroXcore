@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field
@@ -34,3 +35,15 @@ class UserUpdate(BaseModel):
     first_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     last_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     password: Optional[str] = Field(default=None, min_length=6, max_length=72)
+
+
+class ProfileOut(BaseModel):
+    id: int
+    user_id: int
+    email: EmailStr
+    first_name: str
+    last_name: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

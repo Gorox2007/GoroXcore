@@ -1,9 +1,11 @@
+from typing import Optional
+
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from . import auth, models, schemas
+from . import auth, broker, models, schemas
 from .database import Base, SessionLocal, engine
 
 # Create tables on startup
@@ -53,7 +55,7 @@ def get_current_user(
 
 
 @app.post("/register", response_model=schemas.Token, status_code=status.HTTP_201_CREATED)
-def register_user(payload: schemas.UserCreate, db: Session = Depends(get_db)):
+async def register_user(payload: schemas.UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(models.User).filter(models.User.email == payload.email).first()
     if existing_user:
         raise HTTPException(
@@ -71,6 +73,22 @@ def register_user(payload: schemas.UserCreate, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    try:
+        await broker.publish_user_registered_event(
+            {
+                "event_type": broker.USER_REGISTERED_EVENT,
+                "user_id": user.id,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+            }
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Profile creation event could not be published",
+        ) from exc
 
     token = auth.create_access_token({"sub": user.email})
     return schemas.Token(access_token=token)
@@ -108,12 +126,43 @@ def login_with_form(
     return schemas.Token(access_token=token)
 
 
+@app.get("/profiles/me", response_model=schemas.ProfileOut)
+def get_my_profile(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    profile = (
+        db.query(models.Profile)
+        .filter(models.Profile.user_id == current_user.id)
+        .first()
+    )
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile is not ready yet",
+        )
+    return profile
+
+
 @app.get("/users", response_model=list[schemas.UserOut])
 def list_users(
     _: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    user_id: Optional[int] = None,
+    email: Optional[str] = None,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
 ):
-    return db.query(models.User).all()
+    query = db.query(models.User)
+    if user_id is not None:
+        query = query.filter(models.User.id == user_id)
+    if email is not None:
+        query = query.filter(models.User.email == email)
+    if first_name is not None:
+        query = query.filter(models.User.first_name == first_name)
+    if last_name is not None:
+        query = query.filter(models.User.last_name == last_name)
+    return query.all()
 
 
 @app.patch("/users/me", response_model=schemas.UserOut)
