@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import logging
+import os
 
 import httpx
 from fastapi import Body, Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +37,39 @@ app = FastAPI(
         "требуют JWT, а создание бронирования сразу создаёт платёж."
     ),
     version="1.0.0",
+)
+
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ORIGINS",
+        ",".join(
+            [
+                "http://localhost:8000",
+                "http://127.0.0.1:8000",
+                "http://localhost:8001",
+                "http://127.0.0.1:8001",
+                "http://localhost:8002",
+                "http://127.0.0.1:8002",
+                "http://localhost:8003",
+                "http://127.0.0.1:8003",
+            ]
+        ),
+    ).split(",")
+    if origin.strip()
+]
+cors_origin_regex = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -138,6 +173,18 @@ def booking_with_payment_to_out(booking: models.Booking, payment_data: dict) -> 
         }
     )
     return payload
+
+
+def fallback_match_info_from_payload(payload: schemas.BookingCreate) -> dict | None:
+    if payload.seats_available is None or payload.unit_price is None:
+        return None
+    return {
+        "match_id": payload.match_id,
+        "seats_available": max(int(payload.seats_available), 0),
+        "unit_price": Decimal(str(payload.unit_price)),
+        "currency": payload.currency or "RUB",
+        "status": payload.match_status,
+    }
 
 
 async def create_payment_for_booking(booking: models.Booking, access_token: str) -> dict:
@@ -253,12 +300,26 @@ async def create_booking(
 ):
     try:
         match_info = await fetch_match_ticketing_info(payload.match_id)
-    except MonolithDataError:
-        logger.exception("Монолит вернул некорректные данные по матчу id=%s", payload.match_id)
-        return error_response(503, "Монолит недоступен", "Некорректные данные матча")
-    except MonolithUnavailableError:
-        logger.exception("Не удалось получить данные матча id=%s из монолита", payload.match_id)
-        return error_response(503, "Монолит недоступен", "Не удалось получить данные матча")
+    except MonolithDataError as exc:
+        match_info = fallback_match_info_from_payload(payload)
+        if not match_info:
+            logger.exception("Монолит вернул некорректные данные по матчу id=%s", payload.match_id)
+            return error_response(503, "Монолит недоступен", "Некорректные данные матча")
+        logger.warning(
+            "Используем данные матча id=%s из запроса: монолит вернул некорректные данные (%s)",
+            payload.match_id,
+            exc,
+        )
+    except MonolithUnavailableError as exc:
+        match_info = fallback_match_info_from_payload(payload)
+        if not match_info:
+            logger.exception("Не удалось получить данные матча id=%s из монолита", payload.match_id)
+            return error_response(503, "Монолит недоступен", "Не удалось получить данные матча")
+        logger.warning(
+            "Используем данные матча id=%s из запроса: монолит недоступен (%s)",
+            payload.match_id,
+            exc,
+        )
 
     if not match_info:
         return error_response(400, "Некорректные данные запроса", "match_id не найден")

@@ -8,7 +8,6 @@
 <div class="content-section">
     <div class="cart-head">
         <p>Здесь отображаются ваши бронирования билетов.</p>
-        <button id="refresh-bookings-btn" type="button">Обновить</button>
     </div>
 
     <div id="cart-message" class="cart-message"></div>
@@ -23,16 +22,6 @@
         gap: 1rem;
         flex-wrap: wrap;
         margin-bottom: 1rem;
-    }
-
-    .cart-head button {
-        border: 0;
-        border-radius: 8px;
-        background: #4455cc;
-        color: #fff;
-        padding: 0.6rem 1rem;
-        font-weight: 700;
-        cursor: pointer;
     }
 
     .cart-message {
@@ -77,25 +66,22 @@
         flex-wrap: wrap;
     }
 
-    .booking-actions button,
-    .booking-actions a {
+    .booking-actions button {
         border: 0;
         border-radius: 8px;
         padding: 0.55rem 0.9rem;
         font-weight: 700;
-        text-decoration: none;
         display: inline-block;
+        color: #fff;
+        cursor: pointer;
     }
 
-    .booking-actions a {
+    .booking-actions button.pay {
         background: #ff6b35;
-        color: #fff;
     }
 
     .booking-actions button.cancel {
         background: #d92d20;
-        color: #fff;
-        cursor: pointer;
     }
 
     .status-badge {
@@ -125,13 +111,12 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
+    <script>
     (function cartPageScript() {
         const ticketingApiUrl = "{{ ticketing_api_url|escapejs }}";
-        const paymentPageBase = "{% url 'payment_page' '__PAYMENT_ID__' %}";
+        const paymentApiUrl = "{{ payment_api_url|escapejs }}";
         const messageElement = document.getElementById("cart-message");
         const listElement = document.getElementById("bookings-list");
-        const refreshButton = document.getElementById("refresh-bookings-btn");
 
         function setMessage(text, type) {
             messageElement.textContent = text || "";
@@ -147,12 +132,22 @@
                 .replace(/'/g, "&#039;");
         }
 
-        function paymentPageUrl(paymentId) {
-            return paymentPageBase.replace("__PAYMENT_ID__", encodeURIComponent(paymentId));
-        }
-
         function canCancel(status) {
             return status === "pending_payment" || status === "confirmed";
+        }
+
+        function canPay(booking) {
+            return booking.status === "pending_payment" && Boolean(booking.payment_reference);
+        }
+
+        function statusLabel(status) {
+            const labels = {
+                pending_payment: "ожидает оплаты",
+                confirmed: "оплачено",
+                cancelled: "отменено",
+                expired: "истекло",
+            };
+            return labels[status] || status;
         }
 
         function renderBookings(bookings) {
@@ -162,11 +157,11 @@
             }
             listElement.innerHTML = bookings.map(function mapBooking(booking) {
                 const statusClass = "status-" + escapeHtml(booking.status);
-                const payAction = booking.payment_reference
-                    ? "<a href=\"" + paymentPageUrl(booking.payment_reference) + "\">Открыть оплату</a>"
+                const payAction = canPay(booking)
+                    ? "<button class=\"pay\" data-booking-id=\"" + escapeHtml(booking.id) + "\" data-payment-id=\"" + escapeHtml(booking.payment_reference) + "\">Оплатить</button>"
                     : "";
                 const cancelAction = canCancel(booking.status)
-                    ? "<button class=\"cancel\" data-booking-id=\"" + booking.id + "\">Отменить бронь</button>"
+                    ? "<button class=\"cancel\" data-booking-id=\"" + escapeHtml(booking.id) + "\">Отменить бронь</button>"
                     : "";
                 return (
                     "<article class=\"booking-card\">" +
@@ -175,7 +170,7 @@
                             "<div><strong>Матч:</strong> #" + escapeHtml(booking.match_id) + "</div>" +
                             "<div><strong>Билетов:</strong> " + escapeHtml(booking.quantity) + "</div>" +
                             "<div><strong>Сумма:</strong> " + escapeHtml(booking.total_price) + " " + escapeHtml(booking.currency) + "</div>" +
-                            "<div><strong>Статус:</strong> <span class=\"status-badge " + statusClass + "\">" + escapeHtml(booking.status) + "</span></div>" +
+                            "<div><strong>Статус:</strong> <span class=\"status-badge " + statusClass + "\">" + escapeHtml(statusLabel(booking.status)) + "</span></div>" +
                             "<div><strong>Платёж:</strong> " + escapeHtml(booking.payment_reference || "не создан") + "</div>" +
                         "</div>" +
                         "<div class=\"booking-actions\">" + payAction + cancelAction + "</div>" +
@@ -235,6 +230,27 @@
             }
         }
 
+        async function confirmBooking(bookingId, paymentId) {
+            await requestJson(ticketingApiUrl + "/bookings/" + encodeURIComponent(bookingId) + "/confirm", {
+                method: "POST",
+                body: JSON.stringify({ payment_reference: paymentId }),
+            });
+        }
+
+        async function payBooking(bookingId, paymentId) {
+            setMessage("Подтверждаем оплату...", "");
+            try {
+                await requestJson(paymentApiUrl + "/payments/" + encodeURIComponent(paymentId) + "/pay", {
+                    method: "POST",
+                });
+                await confirmBooking(bookingId, paymentId);
+                setMessage("Бронирование оплачено.", "success");
+                await loadBookings();
+            } catch (error) {
+                setMessage(error.message, "error");
+            }
+        }
+
         listElement.addEventListener("click", function onClick(event) {
             const target = event.target;
             if (!(target instanceof HTMLElement)) {
@@ -245,10 +261,16 @@
                 if (bookingId) {
                     cancelBooking(bookingId);
                 }
+                return;
+            }
+            if (target.matches("button.pay")) {
+                const bookingId = target.getAttribute("data-booking-id");
+                const paymentId = target.getAttribute("data-payment-id");
+                if (bookingId && paymentId) {
+                    payBooking(bookingId, paymentId);
+                }
             }
         });
-
-        refreshButton.addEventListener("click", loadBookings);
 
         if (!window.GXAuth.requireAuthOrRedirect(window.location.pathname)) {
             return;

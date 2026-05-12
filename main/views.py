@@ -749,13 +749,6 @@ def cart_page(request):
     return render(request, "main/cart.html", context)
 
 
-def payment_page(request, payment_id):
-    context = {
-        "title": "Оплата",
-        "payment_id": payment_id,
-    }
-    context.update(frontend_service_urls())
-    return render(request, "main/payment.html", context)
 
 
 

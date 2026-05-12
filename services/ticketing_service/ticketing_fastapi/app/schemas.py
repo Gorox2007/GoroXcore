@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 
 from pydantic import BaseModel, EmailStr, Field
@@ -18,6 +19,27 @@ class BookingCreate(BaseModel):
         default=None,
         description="ФИО клиента. Если не передано, берётся из JWT.",
         max_length=255,
+    )
+    seats_available: int | None = Field(
+        default=None,
+        description="Fallback: доступные места с монолита, если Ticketing не может обратиться к нему напрямую.",
+        ge=0,
+    )
+    unit_price: Decimal | None = Field(
+        default=None,
+        description="Fallback: цена билета с монолита, если Ticketing не может обратиться к нему напрямую.",
+        ge=0,
+    )
+    currency: str | None = Field(
+        default=None,
+        description="Fallback: валюта цены билета.",
+        min_length=3,
+        max_length=3,
+    )
+    match_status: str | None = Field(
+        default=None,
+        description="Fallback: статус матча с монолита.",
+        max_length=20,
     )
 
 

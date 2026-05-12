@@ -6,7 +6,6 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('auth/', views.auth_page, name='auth_page'),
     path('cart/', views.cart_page, name='cart_page'),
-    path('payment/<str:payment_id>/', views.payment_page, name='payment_page'),
     path('tournament/', views.tournament, name='tournament'),
     path('club/<int:club_id>/', views.club, name='club'),
     path('match/<int:match_id>/', views.match, name='match'),

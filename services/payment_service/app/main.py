@@ -1,9 +1,11 @@
 import hashlib
+import os
 from contextlib import asynccontextmanager
 from typing import Any
 
 import aio_pika
 from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.broker.publisher import publish_payment_event
@@ -35,6 +37,39 @@ app = FastAPI(
     description="Payment microservice for football ticket booking",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ORIGINS",
+        ",".join(
+            [
+                "http://localhost:8000",
+                "http://127.0.0.1:8000",
+                "http://localhost:8001",
+                "http://127.0.0.1:8001",
+                "http://localhost:8002",
+                "http://127.0.0.1:8002",
+                "http://localhost:8003",
+                "http://127.0.0.1:8003",
+            ]
+        ),
+    ).split(",")
+    if origin.strip()
+]
+cors_origin_regex = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

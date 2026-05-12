@@ -61,6 +61,53 @@
             </div>
         </div>
 
+        {% if match.status == 'scheduled' %}
+        <div class="booking-panel">
+            <div class="booking-panel-head">
+                <div>
+                    <h3>Бронирование билетов</h3>
+                    <p>{{ match.stadium }}, {{ match.town }}</p>
+                </div>
+                <div class="booking-price">
+                    <span id="booking-unit-price">{{ match.price }}</span> RUB
+                </div>
+            </div>
+
+            <div class="booking-facts">
+                <div>
+                    <strong>Доступно мест</strong>
+                    <span id="booking-available">{{ match.seats_available }}</span>
+                </div>
+                <div>
+                    <strong>Дата</strong>
+                    <span>{{ match.datetime|date:"d.m.Y H:i" }}</span>
+                </div>
+                <div>
+                    <strong>Оплата</strong>
+                    <span>в корзине</span>
+                </div>
+            </div>
+
+            <form id="booking-form"
+                  class="booking-form"
+                  data-match-id="{{ match.id }}"
+                  data-unit-price="{{ match.price }}"
+                  data-seats="{{ match.seats_available }}"
+                  data-currency="RUB"
+                  data-status="{{ match.status }}">
+                <label>
+                    Количество билетов
+                    <input type="number" id="booking-quantity" min="1" value="1" required>
+                </label>
+                <div class="booking-total">
+                    Итого: <span id="booking-total">{{ match.price }}</span> RUB
+                </div>
+                <button type="submit" id="booking-submit-btn">Забронировать</button>
+            </form>
+            <p id="booking-message" class="booking-message"></p>
+        </div>
+        {% endif %}
+
         <!-- Статистика матча -->
         {% if match.status == 'finished' %}
         <div class="match-stats">
@@ -155,6 +202,130 @@
 <style>
     .match-detail {
         width: 100%;
+    }
+
+    .booking-panel {
+        margin-top: 2rem;
+        background: #fff;
+        border: 1px solid #e4e7eb;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .booking-panel-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #edf0f2;
+    }
+
+    .booking-panel h3 {
+        color: #2c3e50;
+        margin-bottom: 0.35rem;
+        font-size: 1.35rem;
+    }
+
+    .booking-panel p {
+        color: #667085;
+    }
+
+    .booking-price {
+        background: #fff4e5;
+        color: #b54708;
+        border-radius: 8px;
+        padding: 0.65rem 0.9rem;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .booking-facts {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 0.8rem;
+        margin-bottom: 1rem;
+    }
+
+    .booking-facts div {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 0.8rem;
+    }
+
+    .booking-facts strong,
+    .booking-facts span {
+        display: block;
+    }
+
+    .booking-facts strong {
+        color: #243b53;
+        margin-bottom: 0.25rem;
+    }
+
+    .booking-facts span {
+        color: #52606d;
+    }
+
+    .booking-form {
+        display: grid;
+        grid-template-columns: minmax(170px, 220px) 1fr auto;
+        align-items: end;
+        gap: 1rem;
+    }
+
+    .booking-form label {
+        display: grid;
+        gap: 0.35rem;
+        color: #334e68;
+        font-weight: 700;
+    }
+
+    .booking-form input {
+        border: 1px solid #cbd2d9;
+        border-radius: 8px;
+        padding: 0.65rem 0.75rem;
+        font-size: 1rem;
+    }
+
+    .booking-total {
+        color: #1f2933;
+        font-size: 1.05rem;
+        font-weight: 800;
+        padding-bottom: 0.65rem;
+    }
+
+    .booking-form button {
+        border: 0;
+        border-radius: 8px;
+        background: #ff6b35;
+        color: #fff;
+        padding: 0.72rem 1rem;
+        font-weight: 800;
+        cursor: pointer;
+        min-height: 44px;
+    }
+
+    .booking-form button:disabled {
+        background: #9aa5b1;
+        cursor: not-allowed;
+    }
+
+    .booking-message {
+        margin-top: 0.85rem;
+        font-weight: 700;
+        min-height: 1.5rem;
+    }
+
+    .booking-message.error {
+        color: #b42318;
+    }
+
+    .booking-message.success {
+        color: #067647;
     }
     
     .match-teams {
@@ -402,6 +573,14 @@
         .stats-grid {
             grid-template-columns: 1fr;
         }
+
+        .booking-form {
+            grid-template-columns: 1fr;
+        }
+
+        .booking-total {
+            padding-bottom: 0;
+        }
         
         .match-navigation {
             flex-direction: column;
@@ -414,4 +593,131 @@
         }
     }
 </style>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if match.status == 'scheduled' %}
+<script>
+    (function matchBookingScript() {
+        const ticketingApiUrl = "{{ ticketing_api_url|escapejs }}";
+        const cartUrl = "{% url 'cart_page' %}";
+        const form = document.getElementById("booking-form");
+        if (!form) {
+            return;
+        }
+
+        const quantityInput = document.getElementById("booking-quantity");
+        const submitButton = document.getElementById("booking-submit-btn");
+        const messageElement = document.getElementById("booking-message");
+        const availableElement = document.getElementById("booking-available");
+        const unitPriceElement = document.getElementById("booking-unit-price");
+        const totalElement = document.getElementById("booking-total");
+        const matchId = Number(form.dataset.matchId);
+        let unitPrice = parseMoney(form.dataset.unitPrice);
+        let availableSeats = Number(form.dataset.seats || 0);
+        let currency = form.dataset.currency || "RUB";
+
+        function parseMoney(value) {
+            const normalized = String(value || "0").replace(",", ".");
+            const number = Number(normalized);
+            return Number.isFinite(number) ? number : 0;
+        }
+
+        function formatMoney(value) {
+            return Number(value || 0).toLocaleString("ru-RU", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            });
+        }
+
+        function setMessage(text, type) {
+            messageElement.textContent = text || "";
+            messageElement.className = "booking-message " + (type || "");
+        }
+
+        function getQuantity() {
+            const quantity = Number(quantityInput.value);
+            return Number.isFinite(quantity) ? Math.max(1, Math.floor(quantity)) : 1;
+        }
+
+        function syncTotals() {
+            const quantity = Math.min(getQuantity(), Math.max(availableSeats, 1));
+            if (Number(quantityInput.value) !== quantity) {
+                quantityInput.value = quantity;
+            }
+            totalElement.textContent = formatMoney(unitPrice * quantity);
+        }
+
+        function syncAvailability() {
+            availableElement.textContent = String(availableSeats);
+            unitPriceElement.textContent = formatMoney(unitPrice);
+            quantityInput.max = String(Math.max(availableSeats, 1));
+            submitButton.disabled = availableSeats < 1;
+            if (availableSeats < 1) {
+                setMessage("На этот матч нет доступных мест.", "error");
+            }
+            syncTotals();
+        }
+
+        async function requestJson(url, options) {
+            const token = window.GXAuth.requireAuthOrRedirect(window.location.pathname);
+            if (!token) {
+                throw new Error("Необходима авторизация");
+            }
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer " + token,
+                    ...(options && options.headers ? options.headers : {}),
+                },
+            });
+            let data = {};
+            try {
+                data = await response.json();
+            } catch (error) {
+                data = {};
+            }
+            if (!response.ok) {
+                throw new Error(data.details || data.error || data.detail || "Ошибка запроса");
+            }
+            return data;
+        }
+
+        async function submitBooking(event) {
+            event.preventDefault();
+            const quantity = getQuantity();
+            if (quantity > availableSeats) {
+                setMessage("Выберите количество не больше доступных мест.", "error");
+                return;
+            }
+
+            submitButton.disabled = true;
+            setMessage("Создаем бронирование...", "");
+            try {
+                await requestJson(ticketingApiUrl + "/bookings", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        match_id: matchId,
+                        quantity: quantity,
+                        seats_available: availableSeats,
+                        unit_price: unitPrice.toFixed(2),
+                        currency: currency,
+                        match_status: form.dataset.status || "scheduled",
+                    }),
+                });
+                setMessage("Бронирование создано. Открываем корзину...", "success");
+                window.location.href = cartUrl;
+            } catch (error) {
+                setMessage(error.message, "error");
+                submitButton.disabled = availableSeats < 1;
+            }
+        }
+
+        quantityInput.addEventListener("input", syncTotals);
+        form.addEventListener("submit", submitBooking);
+        syncAvailability();
+    })();
+</script>
+{% endif %}
 {% endblock %}
