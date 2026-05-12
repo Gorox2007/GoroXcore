@@ -316,6 +316,8 @@ class MatchAdmin(admin.ModelAdmin):
         'datetime',
         'status_badge',
         'tournament_display',
+        'seats_available',
+        'price',
         'score_display'
     ]
     
@@ -341,7 +343,9 @@ class MatchAdmin(admin.ModelAdmin):
                 'datetime',
                 'status',
                 'town',
-                'stadium'
+                'stadium',
+                'seats_available',
+                'price'
             )
         }),
         ('Результат матча', {

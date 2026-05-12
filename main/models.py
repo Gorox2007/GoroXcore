@@ -2,6 +2,7 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db.models import Q, F
 from django.utils.text import slugify
+from decimal import Decimal
 import os
 
 class Club(models.Model):
@@ -296,6 +297,18 @@ class Match(models.Model):
     )
     datetime = models.DateTimeField(
         verbose_name='Дата и время начала'
+    )
+    seats_available = models.IntegerField(
+        verbose_name='Доступно мест',
+        default=10000,
+        validators=[MinValueValidator(0)]
+    )
+    price = models.DecimalField(
+        verbose_name='Цена билета',
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("1500.00"),
+        validators=[MinValueValidator(0)]
     )
     
     # Результат матча

@@ -1,0 +1,259 @@
+{% extends 'main/layout.html' %}
+
+{% block title %}{{ title }} - GoroXcore{% endblock %}
+
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="content-section">
+    <div class="cart-head">
+        <p>Здесь отображаются ваши бронирования билетов.</p>
+        <button id="refresh-bookings-btn" type="button">Обновить</button>
+    </div>
+
+    <div id="cart-message" class="cart-message"></div>
+    <div id="bookings-list" class="bookings-list"></div>
+</div>
+
+<style>
+    .cart-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+
+    .cart-head button {
+        border: 0;
+        border-radius: 8px;
+        background: #4455cc;
+        color: #fff;
+        padding: 0.6rem 1rem;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+    .cart-message {
+        margin-bottom: 0.9rem;
+        font-weight: 600;
+    }
+
+    .cart-message.error {
+        color: #b42318;
+    }
+
+    .cart-message.success {
+        color: #067647;
+    }
+
+    .bookings-list {
+        display: grid;
+        gap: 0.9rem;
+    }
+
+    .booking-card {
+        border: 1px solid #dfe3e8;
+        border-radius: 10px;
+        padding: 1rem;
+        background: #fff;
+    }
+
+    .booking-main {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 0.55rem;
+    }
+
+    .booking-main strong {
+        color: #243b53;
+    }
+
+    .booking-actions {
+        margin-top: 0.8rem;
+        display: flex;
+        gap: 0.7rem;
+        flex-wrap: wrap;
+    }
+
+    .booking-actions button,
+    .booking-actions a {
+        border: 0;
+        border-radius: 8px;
+        padding: 0.55rem 0.9rem;
+        font-weight: 700;
+        text-decoration: none;
+        display: inline-block;
+    }
+
+    .booking-actions a {
+        background: #ff6b35;
+        color: #fff;
+    }
+
+    .booking-actions button.cancel {
+        background: #d92d20;
+        color: #fff;
+        cursor: pointer;
+    }
+
+    .status-badge {
+        border-radius: 20px;
+        padding: 0.2rem 0.7rem;
+        font-size: 0.83rem;
+        font-weight: 700;
+        display: inline-block;
+    }
+
+    .status-pending_payment {
+        background: #fff4e5;
+        color: #b54708;
+    }
+
+    .status-confirmed {
+        background: #ecfdf3;
+        color: #067647;
+    }
+
+    .status-cancelled,
+    .status-expired {
+        background: #fef3f2;
+        color: #b42318;
+    }
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    (function cartPageScript() {
+        const ticketingApiUrl = "{{ ticketing_api_url|escapejs }}";
+        const paymentPageBase = "{% url 'payment_page' '__PAYMENT_ID__' %}";
+        const messageElement = document.getElementById("cart-message");
+        const listElement = document.getElementById("bookings-list");
+        const refreshButton = document.getElementById("refresh-bookings-btn");
+
+        function setMessage(text, type) {
+            messageElement.textContent = text || "";
+            messageElement.className = "cart-message " + (type || "");
+        }
+
+        function escapeHtml(value) {
+            return String(value || "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/\"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function paymentPageUrl(paymentId) {
+            return paymentPageBase.replace("__PAYMENT_ID__", encodeURIComponent(paymentId));
+        }
+
+        function canCancel(status) {
+            return status === "pending_payment" || status === "confirmed";
+        }
+
+        function renderBookings(bookings) {
+            if (!bookings.length) {
+                listElement.innerHTML = "<p>У вас пока нет бронирований.</p>";
+                return;
+            }
+            listElement.innerHTML = bookings.map(function mapBooking(booking) {
+                const statusClass = "status-" + escapeHtml(booking.status);
+                const payAction = booking.payment_reference
+                    ? "<a href=\"" + paymentPageUrl(booking.payment_reference) + "\">Открыть оплату</a>"
+                    : "";
+                const cancelAction = canCancel(booking.status)
+                    ? "<button class=\"cancel\" data-booking-id=\"" + booking.id + "\">Отменить бронь</button>"
+                    : "";
+                return (
+                    "<article class=\"booking-card\">" +
+                        "<div class=\"booking-main\">" +
+                            "<div><strong>ID брони:</strong> " + escapeHtml(booking.id) + "</div>" +
+                            "<div><strong>Матч:</strong> #" + escapeHtml(booking.match_id) + "</div>" +
+                            "<div><strong>Билетов:</strong> " + escapeHtml(booking.quantity) + "</div>" +
+                            "<div><strong>Сумма:</strong> " + escapeHtml(booking.total_price) + " " + escapeHtml(booking.currency) + "</div>" +
+                            "<div><strong>Статус:</strong> <span class=\"status-badge " + statusClass + "\">" + escapeHtml(booking.status) + "</span></div>" +
+                            "<div><strong>Платёж:</strong> " + escapeHtml(booking.payment_reference || "не создан") + "</div>" +
+                        "</div>" +
+                        "<div class=\"booking-actions\">" + payAction + cancelAction + "</div>" +
+                    "</article>"
+                );
+            }).join("");
+        }
+
+        async function requestJson(url, options) {
+            const token = window.GXAuth.getToken();
+            if (!token) {
+                window.GXAuth.requireAuthOrRedirect(window.location.pathname);
+                throw new Error("Необходима авторизация");
+            }
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer " + token,
+                    ...(options && options.headers ? options.headers : {}),
+                },
+            });
+            let data = {};
+            try {
+                data = await response.json();
+            } catch (error) {
+                data = {};
+            }
+            if (!response.ok) {
+                throw new Error(data.details || data.error || data.detail || "Ошибка запроса");
+            }
+            return data;
+        }
+
+        async function loadBookings() {
+            setMessage("Загружаем бронирования...", "");
+            try {
+                const bookings = await requestJson(ticketingApiUrl + "/bookings", { method: "GET" });
+                renderBookings(bookings);
+                setMessage("Данные обновлены.", "success");
+            } catch (error) {
+                setMessage(error.message, "error");
+            }
+        }
+
+        async function cancelBooking(bookingId) {
+            if (!window.confirm("Отменить это бронирование?")) {
+                return;
+            }
+            setMessage("Отменяем бронирование...", "");
+            try {
+                await requestJson(ticketingApiUrl + "/bookings/" + bookingId, { method: "DELETE" });
+                setMessage("Бронирование отменено.", "success");
+                await loadBookings();
+            } catch (error) {
+                setMessage(error.message, "error");
+            }
+        }
+
+        listElement.addEventListener("click", function onClick(event) {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) {
+                return;
+            }
+            if (target.matches("button.cancel")) {
+                const bookingId = target.getAttribute("data-booking-id");
+                if (bookingId) {
+                    cancelBooking(bookingId);
+                }
+            }
+        });
+
+        refreshButton.addEventListener("click", loadBookings);
+
+        if (!window.GXAuth.requireAuthOrRedirect(window.location.pathname)) {
+            return;
+        }
+        loadBookings();
+    })();
+</script>
+{% endblock %}

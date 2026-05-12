@@ -1,0 +1,133 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  payment-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: payment
+      POSTGRES_PASSWORD: payment
+      POSTGRES_DB: payment
+    volumes:
+      - payment-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payment -d payment"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  auth-api:
+    build:
+      context: ./auth_service
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment:
+      DATABASE_URL: sqlite:////data/auth.db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-this-secret}
+    volumes:
+      - auth-sqlite-data:/data
+    ports:
+      - "${AUTH_PORT:-8003}:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  auth-profile-worker:
+    build:
+      context: ./auth_service
+    command: python -m app.worker
+    environment:
+      DATABASE_URL: sqlite:////data/auth.db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-this-secret}
+    volumes:
+      - auth-sqlite-data:/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      auth-api:
+        condition: service_started
+    restart: unless-stopped
+
+  payment-service:
+    build:
+      context: ./payment_service
+    environment:
+      DATABASE_URL: postgresql+asyncpg://payment:payment@payment-db:5432/payment
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-this-secret}
+      AUTH_TOKEN_URL: http://auth-api:8000/token
+      AUTH_TOKEN_SWAGGER_URL: ${AUTH_TOKEN_SWAGGER_URL:-http://localhost:8003/token}
+      PAYMENT_PUBLIC_BASE_URL: ${PAYMENT_PUBLIC_BASE_URL:-http://localhost:8002}
+    ports:
+      - "${PAYMENT_PORT:-8002}:8000"
+    depends_on:
+      payment-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  ticketing-api:
+    build:
+      context: ./ticketing_service/ticketing_fastapi
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:///./data/ticketing.db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_QUEUE: ticketing.events
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-this-secret}
+      AUTH_TOKEN_URL: http://auth-api:8000/token
+      AUTH_TOKEN_SWAGGER_URL: ${AUTH_TOKEN_SWAGGER_URL:-http://localhost:8003/token}
+      MONOLITH_API_BASE_URL: ${MONOLITH_API_BASE_URL:-http://host.docker.internal:8000}
+      PAYMENT_SERVICE_URL: http://payment-service:8000
+      TICKETING_PUBLIC_BASE_URL: ${TICKETING_PUBLIC_BASE_URL:-http://localhost:8001}
+    volumes:
+      - ticketing-sqlite-data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${TICKETING_PORT:-8001}:8001"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ticketing-payment-consumer:
+    build:
+      context: ./ticketing_service/ticketing_fastapi
+    command: python -m app.consumer
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:///./data/ticketing.db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_QUEUE: ticketing.events
+      PAYMENT_EVENTS_QUEUE: ticketing.payment.events
+      PAYMENT_ROUTING_KEY: payment.*
+    volumes:
+      - ticketing-sqlite-data:/app/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      ticketing-api:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  auth-sqlite-data:
+  payment-postgres-data:
+  ticketing-sqlite-data:

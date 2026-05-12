@@ -3,7 +3,7 @@ import hashlib
 import random
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone as datetime_timezone
 
 import requests
 from django.core.management.base import BaseCommand, CommandError
@@ -15,6 +15,9 @@ from main.models import Club, Tournament, TournamentClub, Match
 
 API_BASE = "https://api.football-data.org/v4"
 DEFAULT_COMPETITIONS = "PL,PD,SA,BL1,FL1"
+PAST_MATCH_GRACE_PERIOD = timedelta(hours=2)
+FINISHED_API_STATUSES = {"FINISHED", "AWARDED"}
+NOT_PLAYED_API_STATUSES = {"CANCELLED", "POSTPONED", "SUSPENDED"}
 
 
 def parse_iso_datetime(value):
@@ -25,7 +28,7 @@ def parse_iso_datetime(value):
     except ValueError:
         return None
     if timezone.is_naive(dt):
-        dt = timezone.make_aware(dt, timezone=timezone.utc)
+        dt = timezone.make_aware(dt, timezone=datetime_timezone.utc)
     return dt
 
 
@@ -106,6 +109,27 @@ def generate_match_stats(home_goals, away_goals, seed):
     }
 
 
+def generate_match_score(seed):
+    rng = random.Random(seed)
+    goal_values = [0, 1, 2, 3, 4, 5]
+    home_weights = [14, 26, 28, 19, 9, 4]
+    away_weights = [20, 30, 26, 15, 6, 3]
+    return (
+        rng.choices(goal_values, weights=home_weights)[0],
+        rng.choices(goal_values, weights=away_weights)[0],
+    )
+
+
+def match_is_finished(api_status, dt, now=None):
+    api_status = (api_status or "").upper()
+    if api_status in FINISHED_API_STATUSES:
+        return True
+    if api_status in NOT_PLAYED_API_STATUSES or dt is None:
+        return False
+    now = now or timezone.now()
+    return dt <= now - PAST_MATCH_GRACE_PERIOD
+
+
 def generate_club_price(club, tournament_name=None):
     top_leagues = {
         "Англия",
@@ -150,6 +174,35 @@ def update_club_aggregates(club):
     club.goals = round(goals_for / count, 1)
     club.goals_missed = round(goals_against / count, 1)
     club.possession = round(possession_total / count)
+
+
+def update_club_form(club):
+    finished_matches = (
+        Match.objects.filter(Q(home_club=club) | Q(away_club=club), status="finished")
+        .order_by("-datetime")[:5]
+    )
+    results = [0, 0, 0, 0, 0]
+    for index, match in enumerate(finished_matches):
+        if match.home_club_id == club.id:
+            club_goals = match.home_goals
+            opponent_goals = match.away_goals
+        else:
+            club_goals = match.away_goals
+            opponent_goals = match.home_goals
+
+        if club_goals > opponent_goals:
+            results[index] = 3
+        elif club_goals == opponent_goals:
+            results[index] = 1
+
+    club.match_1, club.match_2, club.match_3, club.match_4, club.match_5 = results
+    club.next_match = int(
+        Match.objects.filter(
+            Q(home_club=club) | Q(away_club=club),
+            status="scheduled",
+            datetime__gt=timezone.now(),
+        ).exists()
+    )
 
 
 class Command(BaseCommand):
@@ -449,6 +502,22 @@ class Command(BaseCommand):
 
                         score = match.get("score", {})
                         full_time = score.get("fullTime", {}) or {}
+                        api_status = match.get("status")
+                        is_finished = match_is_finished(api_status, dt)
+                        score_seed = stable_seed(
+                            match.get("id"),
+                            home.get("name"),
+                            away.get("name"),
+                            dt.isoformat(),
+                            "score",
+                        )
+                        home_goals = full_time.get("home")
+                        away_goals = full_time.get("away")
+                        if is_finished and (home_goals is None or away_goals is None):
+                            home_goals, away_goals = generate_match_score(score_seed)
+                        else:
+                            home_goals = home_goals or 0
+                            away_goals = away_goals or 0
 
                         home_stats = (home.get("statistics") or {})
                         away_stats = (away.get("statistics") or {})
@@ -458,12 +527,12 @@ class Command(BaseCommand):
                                 home.get("name"),
                                 away.get("name"),
                                 dt.isoformat() if dt else "",
-                                full_time.get("home"),
-                                full_time.get("away"),
+                                home_goals,
+                                away_goals,
                             )
                             synthetic = generate_match_stats(
-                                full_time.get("home") or 0,
-                                full_time.get("away") or 0,
+                                home_goals,
+                                away_goals,
                                 seed=seed,
                             )
                             home_stats = synthetic["home"]
@@ -477,8 +546,8 @@ class Command(BaseCommand):
                             defaults={
                                 "town": home_club.town,
                                 "stadium": match.get("venue") or home_club.stadium,
-                                "home_goals": full_time.get("home") or 0,
-                                "away_goals": full_time.get("away") or 0,
+                                "home_goals": home_goals,
+                                "away_goals": away_goals,
                                 "home_possession": home_stats.get("ball_possession") or 0,
                                 "away_possession": away_stats.get("ball_possession") or 0,
                                 "home_shots": home_stats.get("shots") or 0,
@@ -489,9 +558,7 @@ class Command(BaseCommand):
                                 "away_red_cards": away_stats.get("red_cards") or 0,
                                 "home_saves": home_stats.get("saves") or 0,
                                 "away_saves": away_stats.get("saves") or 0,
-                                "status": "finished"
-                                if match.get("status") == "FINISHED"
-                                else "scheduled",
+                                "status": "finished" if is_finished else "scheduled",
                             },
                         )
 
@@ -500,7 +567,21 @@ class Command(BaseCommand):
         self.stdout.write(self.style.MIGRATE_HEADING("Обновляем статистику клубов..."))
         for club in Club.objects.all():
             update_club_aggregates(club)
+            update_club_form(club)
             if club.price <= 0:
                 tournament_name = club.tournaments.first().name if club.tournaments.exists() else None
                 club.price = generate_club_price(club, tournament_name=tournament_name)
-            club.save(update_fields=["goals", "goals_missed", "possession", "price"])
+            club.save(
+                update_fields=[
+                    "goals",
+                    "goals_missed",
+                    "possession",
+                    "price",
+                    "match_1",
+                    "match_2",
+                    "match_3",
+                    "match_4",
+                    "match_5",
+                    "next_match",
+                ]
+            )

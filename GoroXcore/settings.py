@@ -27,7 +27,10 @@ SECRET_KEY = 'django-insecure-%4iur4^ix326f14a!)7_y2idesqu9m+yrka#()ibkpis)q^2m+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv(
+    "DJANGO_ALLOWED_HOSTS",
+    "localhost,127.0.0.1,0.0.0.0,monolith,host.docker.internal",
+).split(",")
 
 
 # Application definition
@@ -136,6 +139,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-STATICFILES_DIRS = [
-    BASE_DIR / "static",
-]
+static_dir = BASE_DIR / "static"
+STATICFILES_DIRS = [static_dir] if static_dir.exists() else []

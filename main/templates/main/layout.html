@@ -67,10 +67,39 @@
             border: 2px solid transparent;
         }
 
+        .nav-links button {
+            color: white;
+            text-decoration: none;
+            padding: 0.7rem 1.2rem;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            border: 2px solid transparent;
+            background: transparent;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
         .nav-links a:hover {
             background: #ff6b35;
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(255,107,53,0.3);
+        }
+
+        .nav-links button:hover {
+            background: #ff6b35;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(255,107,53,0.3);
+        }
+
+        .user-badge {
+            color: #ffccae;
+            font-size: 0.9rem;
+            max-width: 260px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            align-self: center;
         }
 
         .main-content {
@@ -198,6 +227,13 @@
         <div class="container">
             <nav class="nav">
                 <a href="{% url 'home' %}" class="logo">GoroXcore</a>
+                <ul class="nav-links">
+                    <li><a href="{% url 'home' %}">Главная</a></li>
+                    <li><a href="{% url 'cart_page' %}">Корзина</a></li>
+                    <li><a href="{% url 'auth_page' %}" id="nav-auth-link">Вход</a></li>
+                    <li><button id="nav-logout-btn" type="button" style="display:none;">Выход</button></li>
+                    <li class="user-badge" id="nav-user-badge"></li>
+                </ul>
             </nav>
         </div>
     </header>
@@ -224,5 +260,144 @@
             </div>
         </div>
     </footer>
+
+    <script>
+        (function initGxAuth() {
+            const STORAGE_KEY = "gx_access_token";
+            const authPageUrl = "{% url 'auth_page' %}";
+
+            function decodeBase64Url(value) {
+                try {
+                    const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+                    const padding = "=".repeat((4 - normalized.length % 4) % 4);
+                    return atob(normalized + padding);
+                } catch (error) {
+                    return null;
+                }
+            }
+
+            function parseJwt(token) {
+                if (!token || typeof token !== "string") {
+                    return null;
+                }
+                const parts = token.split(".");
+                if (parts.length !== 3) {
+                    return null;
+                }
+                const decoded = decodeBase64Url(parts[1]);
+                if (!decoded) {
+                    return null;
+                }
+                try {
+                    return JSON.parse(decoded);
+                } catch (error) {
+                    return null;
+                }
+            }
+
+            function isExpired(payload) {
+                if (!payload || !payload.exp) {
+                    return false;
+                }
+                const expiresAtMs = Number(payload.exp) * 1000;
+                return Number.isFinite(expiresAtMs) && Date.now() >= expiresAtMs;
+            }
+
+            function clearToken() {
+                localStorage.removeItem(STORAGE_KEY);
+            }
+
+            function getToken() {
+                const token = localStorage.getItem(STORAGE_KEY);
+                if (!token) {
+                    return null;
+                }
+                const payload = parseJwt(token);
+                if (!payload || isExpired(payload)) {
+                    clearToken();
+                    return null;
+                }
+                return token;
+            }
+
+            function saveToken(token) {
+                localStorage.setItem(STORAGE_KEY, token);
+            }
+
+            function getUser() {
+                const token = getToken();
+                if (!token) {
+                    return null;
+                }
+                const payload = parseJwt(token);
+                if (!payload) {
+                    return null;
+                }
+                const firstName = String(payload.first_name || "").trim();
+                const lastName = String(payload.last_name || "").trim();
+                const name = (firstName + " " + lastName).trim();
+                return {
+                    email: payload.email || payload.sub || "",
+                    displayName: name || payload.email || payload.sub || "Пользователь",
+                };
+            }
+
+            function requireAuthOrRedirect(nextPath) {
+                const token = getToken();
+                if (token) {
+                    return token;
+                }
+                const target = nextPath || (window.location.pathname + window.location.search);
+                const nextParam = encodeURIComponent(target);
+                window.location.href = authPageUrl + "?next=" + nextParam;
+                return null;
+            }
+
+            function refreshNav() {
+                const token = getToken();
+                const authLink = document.getElementById("nav-auth-link");
+                const logoutButton = document.getElementById("nav-logout-btn");
+                const userBadge = document.getElementById("nav-user-badge");
+                if (!authLink || !logoutButton || !userBadge) {
+                    return;
+                }
+                if (token) {
+                    const user = getUser();
+                    authLink.textContent = "Профиль";
+                    authLink.href = "{% url 'cart_page' %}";
+                    logoutButton.style.display = "inline-block";
+                    userBadge.textContent = user ? user.displayName : "";
+                } else {
+                    authLink.textContent = "Вход";
+                    authLink.href = authPageUrl;
+                    logoutButton.style.display = "none";
+                    userBadge.textContent = "";
+                }
+            }
+
+            window.GXAuth = {
+                getToken,
+                saveToken,
+                clearToken,
+                getUser,
+                parseJwt,
+                requireAuthOrRedirect,
+                refreshNav,
+            };
+
+            document.addEventListener("DOMContentLoaded", function onReady() {
+                const logoutButton = document.getElementById("nav-logout-btn");
+                if (logoutButton) {
+                    logoutButton.addEventListener("click", function onLogout() {
+                        clearToken();
+                        refreshNav();
+                        window.location.href = "{% url 'home' %}";
+                    });
+                }
+                refreshNav();
+            });
+        })();
+    </script>
+    {% block extra_scripts %}{% endblock %}
 </body>
 </html>

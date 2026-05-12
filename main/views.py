@@ -1,3 +1,4 @@
+from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import Q
 from .models import Club, Match, Tournament
@@ -8,8 +9,17 @@ from .models import Club, Match, Tournament, TournamentClub
 from django.db import transaction
 from datetime import datetime, timedelta
 import random
+import os
 
 from django.db import connection
+
+
+def frontend_service_urls():
+    return {
+        "auth_api_url": os.getenv("FRONTEND_AUTH_API_URL", "http://localhost:8003").rstrip("/"),
+        "ticketing_api_url": os.getenv("FRONTEND_TICKETING_API_URL", "http://localhost:8001").rstrip("/"),
+        "payment_api_url": os.getenv("FRONTEND_PAYMENT_API_URL", "http://localhost:8002").rstrip("/"),
+    }
 
 def load_tournament_data():
     """Загрузка данных для турниров по 6 клубов каждый с полным кругом матчей"""
@@ -699,7 +709,53 @@ def match(request, match_id):
         'has_corners': has_corners,
         'has_fouls': has_fouls,
     }
+    context.update(frontend_service_urls())
     return render(request, 'main/match.html', context)
+
+
+def match_ticketing_info(request, match_id):
+    match = get_object_or_404(
+        Match.objects.select_related('home_club', 'away_club', 'tournament'),
+        id=match_id,
+    )
+    return JsonResponse({
+        'match_id': match.id,
+        'home_club': match.home_club.name,
+        'away_club': match.away_club.name,
+        'tournament': match.tournament.name if match.tournament else None,
+        'datetime': match.datetime.isoformat(),
+        'status': match.status,
+        'seats_available': match.seats_available,
+        'price': str(match.price),
+        'currency': 'RUB',
+    })
+
+
+def auth_page(request):
+    next_url = (request.GET.get("next") or "/").strip() or "/"
+    context = {
+        "title": "Вход и регистрация",
+        "next_url": next_url,
+    }
+    context.update(frontend_service_urls())
+    return render(request, "main/auth.html", context)
+
+
+def cart_page(request):
+    context = {
+        "title": "Корзина",
+    }
+    context.update(frontend_service_urls())
+    return render(request, "main/cart.html", context)
+
+
+def payment_page(request, payment_id):
+    context = {
+        "title": "Оплата",
+        "payment_id": payment_id,
+    }
+    context.update(frontend_service_urls())
+    return render(request, "main/payment.html", context)
 
 
 
