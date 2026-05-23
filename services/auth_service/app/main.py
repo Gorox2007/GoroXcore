@@ -7,7 +7,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from . import auth, broker, models, schemas
+from . import auth, broker, metrics as app_metrics, models, schemas
 from .database import Base, SessionLocal, engine
 
 # Create tables on startup
@@ -44,6 +44,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app_metrics.setup_metrics(app)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 
@@ -130,6 +131,7 @@ async def register_user(payload: schemas.UserCreate, db: Session = Depends(get_d
             detail="Profile creation event could not be published",
         ) from exc
 
+    app_metrics.AUTH_REGISTRATIONS_TOTAL.labels(app_metrics.SERVICE_NAME).inc()
     token = create_user_token(user)
     return schemas.Token(access_token=token)
 

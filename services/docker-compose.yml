@@ -1,6 +1,7 @@
 services:
   rabbitmq:
     image: rabbitmq:3-management
+    network_mode: host
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -10,6 +11,8 @@ services:
 
   payment-db:
     image: postgres:16
+    network_mode: host
+    command: ["postgres", "-c", "port=5435"]
     environment:
       POSTGRES_USER: payment
       POSTGRES_PASSWORD: payment
@@ -17,8 +20,28 @@ services:
     volumes:
       - payment-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U payment -d payment"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5435 -U payment -d payment"]
       interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  monolith:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      network: host
+    network_mode: host
+    command: sh -c "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    environment:
+      SKIP_FOOTBALL_IMPORT: "1"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0,monolith,host.docker.internal
+      FRONTEND_AUTH_API_URL: http://localhost:8003
+      FRONTEND_TICKETING_API_URL: http://localhost:8001
+      FRONTEND_PAYMENT_API_URL: http://localhost:8002
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/metrics')"]
+      interval: 10s
       timeout: 5s
       retries: 10
     restart: unless-stopped
@@ -26,15 +49,15 @@ services:
   auth-api:
     build:
       context: ./auth_service
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+      network: host
+    network_mode: host
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8003
     environment:
       DATABASE_URL: sqlite:////data/auth.db
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_URL: amqp://guest:guest@127.0.0.1:5672/
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-this-secret}
     volumes:
       - auth-sqlite-data:/data
-    ports:
-      - "${AUTH_PORT:-8003}:8000"
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -43,10 +66,12 @@ services:
   auth-profile-worker:
     build:
       context: ./auth_service
+      network: host
+    network_mode: host
     command: python -m app.worker
     environment:
       DATABASE_URL: sqlite:////data/auth.db
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_URL: amqp://guest:guest@127.0.0.1:5672/
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-this-secret}
     volumes:
       - auth-sqlite-data:/data
@@ -60,22 +85,23 @@ services:
   payment-service:
     build:
       context: ./payment_service
+      network: host
+    network_mode: host
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8002"
     environment:
-      DATABASE_URL: postgresql+asyncpg://payment:payment@payment-db:5432/payment
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      DATABASE_URL: postgresql+asyncpg://payment:payment@127.0.0.1:5435/payment
+      RABBITMQ_URL: amqp://guest:guest@127.0.0.1:5672/
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-this-secret}
-      AUTH_TOKEN_URL: http://auth-api:8000/token
+      AUTH_TOKEN_URL: http://127.0.0.1:8003/token
       AUTH_TOKEN_SWAGGER_URL: ${AUTH_TOKEN_SWAGGER_URL:-http://localhost:8003/token}
       PAYMENT_PUBLIC_BASE_URL: ${PAYMENT_PUBLIC_BASE_URL:-http://localhost:8002}
-    ports:
-      - "${PAYMENT_PORT:-8002}:8000"
     depends_on:
       payment-db:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -84,23 +110,21 @@ services:
   ticketing-api:
     build:
       context: ./ticketing_service/ticketing_fastapi
+      network: host
+    network_mode: host
     command: uvicorn app.main:app --host 0.0.0.0 --port 8001
     environment:
       DATABASE_URL: sqlite+aiosqlite:///./data/ticketing.db
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_URL: amqp://guest:guest@127.0.0.1:5672/
       RABBITMQ_QUEUE: ticketing.events
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-this-secret}
-      AUTH_TOKEN_URL: http://auth-api:8000/token
+      AUTH_TOKEN_URL: http://127.0.0.1:8003/token
       AUTH_TOKEN_SWAGGER_URL: ${AUTH_TOKEN_SWAGGER_URL:-http://localhost:8003/token}
-      MONOLITH_API_BASE_URL: ${MONOLITH_API_BASE_URL:-http://host.docker.internal:8000}
-      PAYMENT_SERVICE_URL: http://payment-service:8000
+      MONOLITH_API_BASE_URL: ${MONOLITH_API_BASE_URL:-http://127.0.0.1:8000}
+      PAYMENT_SERVICE_URL: http://127.0.0.1:8002
       TICKETING_PUBLIC_BASE_URL: ${TICKETING_PUBLIC_BASE_URL:-http://localhost:8001}
     volumes:
       - ticketing-sqlite-data:/app/data
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    ports:
-      - "${TICKETING_PORT:-8001}:8001"
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -111,10 +135,12 @@ services:
   ticketing-payment-consumer:
     build:
       context: ./ticketing_service/ticketing_fastapi
+      network: host
+    network_mode: host
     command: python -m app.consumer
     environment:
       DATABASE_URL: sqlite+aiosqlite:///./data/ticketing.db
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_URL: amqp://guest:guest@127.0.0.1:5672/
       RABBITMQ_QUEUE: ticketing.events
       PAYMENT_EVENTS_QUEUE: ticketing.payment.events
       PAYMENT_ROUTING_KEY: payment.*
@@ -127,7 +153,45 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    network_mode: host
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      monolith:
+        condition: service_started
+      auth-api:
+        condition: service_started
+      ticketing-api:
+        condition: service_started
+      payment-service:
+        condition: service_started
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.4.12
+    network_mode: host
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   auth-sqlite-data:
   payment-postgres-data:
   ticketing-sqlite-data:
+  prometheus-data:
+  grafana-data:

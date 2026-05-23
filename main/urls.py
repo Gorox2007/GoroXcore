@@ -1,8 +1,11 @@
 from django.urls import path
 from . import views
+from .metrics import metrics_view
 
 
 urlpatterns = [
+    path('metrics', metrics_view, name='metrics'),
+    path('metrics/', metrics_view, name='metrics_slash'),
     path('', views.home, name='home'),
     path('auth/', views.auth_page, name='auth_page'),
     path('cart/', views.cart_page, name='cart_page'),

@@ -8,3 +8,6 @@ aiosqlite
 aio-pika
 httpx
 python-jose[cryptography]
+prometheus-client
+pytest
+pytest-asyncio

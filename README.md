@@ -26,6 +26,7 @@ GoroXcore — учебный Django-проект о футбольных клу�
 - Python
 - Django 5.2
 - SQLite (по умолчанию)
+- Prometheus/Grafana для метрик при запуске через Docker Compose
 
 **Структура проекта**
 - `GoroXcore/` — настройки проекта Django и корневые `urls.py`.
@@ -108,6 +109,7 @@ load_tournament_data()
 - Медиа-файлы сохраняются в `media/`.
 - Статические файлы подключаются из `static/`.
 - База данных по умолчанию — `db.sqlite3`.
+- Инструкция по GitHub Actions и CI/CD: `docs/github-actions.md`.
 
 
 

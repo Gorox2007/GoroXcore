@@ -14,20 +14,40 @@ docker compose up --build
 docker-compose up --build
 ```
 
+В общем compose используется `network_mode: host`, чтобы стек запускался даже
+в окружениях, где у Docker сломан стандартный bridge-интерфейс `docker0`.
+Перед запуском убедитесь, что свободны порты `3000`, `5435`, `5672`, `8000`,
+`8001`, `8002`, `8003`, `9090`, `15672`.
+
 После запуска:
 
 | Сервис | URL |
 | --- | --- |
-| Auth Swagger | http://localhost:8000/docs |
+| Django Monolith | http://localhost:8000 |
+| Auth Swagger | http://localhost:8003/docs |
 | Ticketing Swagger | http://localhost:8001/docs |
 | Payment Swagger | http://localhost:8002/docs |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3000 |
 | RabbitMQ Management | http://localhost:15672 |
 
 RabbitMQ credentials: `guest` / `guest`.
+Grafana credentials: `admin` / `admin`.
+
+## Метрики
+
+Каждый API отдаёт Prometheus-метрики:
+
+- Django Monolith: http://localhost:8000/metrics
+- Auth Service: http://localhost:8003/metrics
+- Ticketing Service: http://localhost:8001/metrics
+- Payment Service: http://localhost:8002/metrics
+
+Минимальные HTTP-метрики: `gx_http_requests_total`, `gx_http_request_duration_seconds`, `gx_http_requests_in_progress`.
 
 ## Связанный сценарий
 
-1. Зарегистрируйте пользователя в Auth: `POST http://localhost:8000/register`.
+1. Зарегистрируйте пользователя в Auth: `POST http://localhost:8003/register`.
 2. Скопируйте JWT или авторизуйтесь через Swagger `Authorize`.
 3. В Ticketing создайте бронь: `POST http://localhost:8001/bookings`.
    - В теле нужны `match_id` и `quantity`.

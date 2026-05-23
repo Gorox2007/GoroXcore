@@ -17,6 +17,7 @@ from app.crud import (
     mark_payment_paid,
 )
 from app.db import get_db
+from app import metrics as app_metrics
 from app.schemas import (
     PaymentCreate,
     PaymentCreateResponse,
@@ -71,6 +72,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app_metrics.setup_metrics(app)
 
 
 def get_rmq(request: Request) -> aio_pika.RobustConnection:
@@ -114,6 +116,9 @@ async def create_payment_endpoint(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     payment = await create_payment(db, payload, str(current_user["email"]))
+    app_metrics.PAYMENT_STATUS_CHANGES_TOTAL.labels(
+        app_metrics.SERVICE_NAME, payment.status
+    ).inc()
     return {
         "payment_id": payment.payment_id,
         "status": payment.status,
@@ -162,6 +167,9 @@ async def pay_payment_endpoint(
     payment = await mark_payment_paid(db, payment_id, signature)
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
+    app_metrics.PAYMENT_STATUS_CHANGES_TOTAL.labels(
+        app_metrics.SERVICE_NAME, payment.status
+    ).inc()
 
     event_data = {
         "payment_id": payment.payment_id,
@@ -200,6 +208,9 @@ async def fail_payment_endpoint(
     payment = await mark_payment_failed(db, payment_id)
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
+    app_metrics.PAYMENT_STATUS_CHANGES_TOTAL.labels(
+        app_metrics.SERVICE_NAME, payment.status
+    ).inc()
 
     event_data = {
         "payment_id": payment.payment_id,

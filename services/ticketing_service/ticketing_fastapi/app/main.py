@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import models, schemas
+from . import metrics as app_metrics, models, schemas
 from .broker import broker
 from .config import settings
 from .database import SessionLocal, ensure_schema
@@ -71,6 +71,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app_metrics.setup_metrics(app)
 
 
 async def get_db():
@@ -358,6 +359,9 @@ async def create_booking(
         await db.commit()
         await db.refresh(booking)
         await broker.publish("booking.cancelled", booking_event_payload(booking))
+        app_metrics.BOOKING_EVENTS_TOTAL.labels(
+            app_metrics.SERVICE_NAME, "booking.cancelled", booking.status
+        ).inc()
         return error_response(
             503,
             "Сервис оплаты недоступен",
@@ -368,6 +372,9 @@ async def create_booking(
     await db.commit()
     await db.refresh(booking)
     await broker.publish("booking.created", booking_event_payload(booking))
+    app_metrics.BOOKING_EVENTS_TOTAL.labels(
+        app_metrics.SERVICE_NAME, "booking.created", booking.status
+    ).inc()
     return booking_with_payment_to_out(booking, payment_data)
 
 
@@ -427,6 +434,9 @@ async def cancel_booking(
         await db.commit()
         await db.refresh(booking)
         await broker.publish("booking.cancelled", booking_event_payload(booking))
+        app_metrics.BOOKING_EVENTS_TOTAL.labels(
+            app_metrics.SERVICE_NAME, "booking.cancelled", booking.status
+        ).inc()
 
     return booking_to_out(booking)
 
@@ -469,6 +479,9 @@ async def confirm_booking(
         await db.commit()
         await db.refresh(booking)
         await broker.publish("booking.confirmed", booking_event_payload(booking))
+        app_metrics.BOOKING_EVENTS_TOTAL.labels(
+            app_metrics.SERVICE_NAME, "booking.confirmed", booking.status
+        ).inc()
 
     return booking_to_out(booking)
 
